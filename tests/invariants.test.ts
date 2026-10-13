@@ -63,4 +63,44 @@ describe('Aura Desk Role & Security Invariants', () => {
     const generatedCode = `${designerInitials}-${prospectInitials}-${orderTitle}`;
     expect(generatedCode).toBe('FA-PA-Three Stone Ring');
   });
+
+  it('formats order date according to seasonal ergonomics (year omitted except Nov, Dec, Jan, Feb)', async () => {
+    const { formatOrderDate } = await import('../src/shared/formatters');
+
+    // October date (Year should be omitted): 13 Oct, Tue - 05:36am
+    const octDate = new Date(2026, 9, 13, 5, 36);
+    expect(formatOrderDate(octDate)).toBe('13 Oct, Tue - 05:36am');
+
+    // November date (Year should be included with '26): 13 Nov, Fri, '26 - 05:14pm
+    const novDate = new Date(2026, 10, 13, 17, 14);
+    expect(formatOrderDate(novDate)).toBe("13 Nov, Fri, '26 - 05:14pm");
+
+    // January date (Year should be included with '27): 05 Jan, Tue, '27 - 09:00am
+    const janDate = new Date(2027, 0, 5, 9, 0);
+    expect(formatOrderDate(janDate)).toBe("5 Jan, Tue, '27 - 09:00am");
+  });
+
+  it('formulates order code with <Designer 2-lettered Code>-<Prospect 2-lettered Code>-<Order Title>', async () => {
+    const { formatOrderCode } = await import('../src/shared/formatters');
+    expect(formatOrderCode('FA', 'Patrick Archer', 'Diamond Halo Ring')).toBe('FA-PA-Diamond Halo Ring');
+    expect(formatOrderCode(undefined, 'Sophia Reed', 'Platinum Pendant')).toBe('UN-SR-Platinum Pendant');
+  });
+
+  it('normalizes statuses to 5 canonical states with assigned colors', async () => {
+    const { normalizeStatus, getStatusStyle } = await import('../src/shared/formatters');
+    expect(normalizeStatus('SUBMITTED_TO_ADMIN')).toBe('Inbox');
+    expect(getStatusStyle('Inbox').colorName).toBe('Yellow');
+
+    expect(normalizeStatus('IN_PRODUCTION')).toBe('In progress');
+    expect(getStatusStyle('In progress').colorName).toBe('Orange');
+
+    expect(normalizeStatus('ADMIN_REVIEW')).toBe('In Review');
+    expect(getStatusStyle('In Review').colorName).toBe('Blue');
+
+    expect(normalizeStatus('DELIVERED')).toBe('Delivered');
+    expect(getStatusStyle('Delivered').colorName).toBe('Green');
+
+    expect(normalizeStatus('RETURNED_TO_AGENT')).toBe('Backlog');
+    expect(getStatusStyle('Backlog').colorName).toBe('Grey');
+  });
 });

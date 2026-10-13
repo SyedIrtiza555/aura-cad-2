@@ -1,10 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
-import type { Order, UserProfile, OrderStatus } from '../../shared/types';
+import type { Order, UserProfile, OrderStatus, SpecimenType } from '../../shared/types';
 import { useUIStore } from '../../shared/store';
-import { Badge, Button, ImageCarousel } from '../../shared/ui';
+import { Button, ImageCarousel } from '../../shared/ui';
 import { copyToClipboard } from '../../shared/notifications';
 import { TimeMachineSlider } from './TimeMachineSlider';
 import { InvoicePanel } from '../invoices/InvoicePanel';
+import {
+  formatOrderDate,
+  formatOrderCode,
+  getStatusStyle,
+  ORDER_STATUSES,
+  SPECIMEN_TYPES,
+  normalizeStatus,
+} from '../../shared/formatters';
 import {
   X,
   Copy,
@@ -25,6 +33,7 @@ import {
   Calendar,
   History,
   Trash2,
+  RefreshCw,
   Image as ImageIcon,
 } from 'lucide-react';
 import { DeleteConfirmModal } from '../../shared/ui';
@@ -58,6 +67,7 @@ export function OrderDetail({
   // Directly editable fields with instant auto-save on blur / change
   const [orderNumber, setOrderNumber] = useState(order.orderNumber);
   const [title, setTitle] = useState(order.title);
+  const [specimenType, setSpecimenType] = useState<SpecimenType>(order.specimen_type || 'Ring');
   const [clientName, setClientName] = useState(order.client_name);
   const [clientPhone, setClientPhone] = useState(order.client_phone || '');
   const [agreedPrice, setAgreedPrice] = useState(String(order.agreed_price || ''));
@@ -82,6 +92,7 @@ export function OrderDetail({
       currentOrderIdRef.current = order.id;
       setOrderNumber(order.orderNumber);
       setTitle(order.title);
+      setSpecimenType(order.specimen_type || 'Ring');
       setClientName(order.client_name);
       setClientPhone(order.client_phone || '');
       setAgreedPrice(String(order.agreed_price || ''));
@@ -95,7 +106,9 @@ export function OrderDetail({
       setAssignedDesignerId(order.assigned_designer_id || '');
       setSalesAgentId(order.sales_agent_id || '');
     } else {
-      // Background sync: update images or assignments if server has changed them
+      if (order.specimen_type && order.specimen_type !== specimenType) {
+        setSpecimenType(order.specimen_type);
+      }
       if (order.images && JSON.stringify(order.images) !== JSON.stringify(images)) {
         setImages(order.images);
       }
@@ -106,7 +119,7 @@ export function OrderDetail({
         setSalesAgentId(order.sales_agent_id || '');
       }
     }
-  }, [order.id, order.images, order.assigned_designer_id, order.sales_agent_id]);
+  }, [order.id, order.images, order.assigned_designer_id, order.sales_agent_id, order.specimen_type]);
 
   const isDesigner = currentUser?.role === 'designer';
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'owner';
@@ -155,14 +168,28 @@ export function OrderDetail({
     setTimeout(() => setCopiedId(false), 2000);
   };
 
+  const handleSyncOrderCode = async () => {
+    const designer = availableDesigners.find((d) => d.uid === assignedDesignerId);
+    const updatedCode = formatOrderCode(
+      designer?.initials || order.assigned_designer_initials,
+      clientName,
+      title
+    );
+    setOrderNumber(updatedCode);
+    await triggerAutoSave({ orderNumber: updatedCode });
+  };
+
   const handleDesignerSelect = async (newDesignerId: string) => {
     setAssignedDesignerId(newDesignerId);
     const designer = availableDesigners.find((d) => d.uid === newDesignerId);
+    const newCode = formatOrderCode(designer?.initials, clientName, title);
+    setOrderNumber(newCode);
     await triggerAutoSave({
       assigned_designer_id: designer?.uid || '',
       assigned_designer_name: designer?.displayName || '',
       assigned_designer_initials: designer?.initials || '',
-      status: order.status === 'SUBMITTED_TO_ADMIN' ? 'ASSIGNED_TO_DESIGNER' : order.status,
+      orderNumber: newCode,
+      status: order.status === 'Inbox' || order.status === 'SUBMITTED_TO_ADMIN' ? 'In progress' : order.status,
     });
   };
 
@@ -205,7 +232,7 @@ export function OrderDetail({
       const existingRevisions = order.revisions || [];
       await onUpdateOrder({
         revisions: [...existingRevisions, newRev],
-        status: 'IN_REVISION',
+        status: 'In Review',
         admin_feedback: revisionText.trim(),
         updated_at: Date.now(),
       });
@@ -215,33 +242,14 @@ export function OrderDetail({
     }
   };
 
-  const getStatusBadge = (status: OrderStatus) => {
-    switch (status) {
-      case 'SUBMITTED_TO_ADMIN':
-        return <Badge variant="warning">Submitted</Badge>;
-      case 'RETURNED_TO_AGENT':
-        return <Badge variant="danger">Returned to Agent</Badge>;
-      case 'ASSIGNED_TO_DESIGNER':
-        return <Badge variant="info">Assigned</Badge>;
-      case 'IN_PRODUCTION':
-        return <Badge variant="purple">In Production</Badge>;
-      case 'ADMIN_REVIEW':
-        return <Badge variant="warning">Admin Review</Badge>;
-      case 'IN_REVISION':
-        return <Badge variant="danger">In Revision</Badge>;
-      case 'DELIVERED':
-        return <Badge variant="info">Delivered (WhatsApp)</Badge>;
-      case 'COMPLETED':
-        return <Badge variant="success">Completed</Badge>;
-    }
-  };
+  const statusStyle = getStatusStyle(order.status);
 
   const containerStyle =
     peekMode === 'full'
-      ? 'fixed inset-0 z-50 bg-[#F5F5F7] overflow-hidden flex flex-col'
+      ? 'fixed inset-0 z-50 bg-[#F5F5F7] flex flex-col h-screen max-h-screen overflow-hidden'
       : peekMode === 'center'
-      ? 'fixed inset-4 sm:inset-12 md:inset-16 z-50 bg-[#F5F5F7] border border-white/90 rounded-3xl shadow-2xl overflow-hidden flex flex-col backdrop-blur-2xl'
-      : 'fixed inset-y-0 right-0 z-40 w-full max-w-xl bg-[#F5F5F7] border-l border-slate-200/80 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-200';
+      ? 'fixed inset-4 sm:inset-10 md:inset-14 z-50 bg-[#F5F5F7] border border-white/90 rounded-3xl shadow-2xl flex flex-col overflow-hidden backdrop-blur-2xl max-h-[92vh] my-auto'
+      : 'fixed inset-y-0 right-0 z-40 w-full max-w-xl bg-[#F5F5F7] border-l border-slate-200/80 shadow-2xl flex flex-col overflow-hidden h-screen max-h-screen animate-in slide-in-from-right duration-200';
 
   return (
     <>
@@ -255,18 +263,19 @@ export function OrderDetail({
       <div className={containerStyle}>
         {/* Header */}
         <div className="p-4 border-b border-slate-200/60 flex items-center justify-between bg-white/70 backdrop-blur-md shrink-0">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 max-w-[65%] overflow-hidden">
             <input
               value={orderNumber}
               disabled={isDesigner}
               onChange={(e) => setOrderNumber(e.target.value)}
               onBlur={() => triggerAutoSave({ orderNumber })}
-              className="font-mono text-xs font-bold text-[#1C1D21] bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#1C1D21] focus:outline-none w-28"
+              className="font-mono text-xs font-bold text-[#1C1D21] bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#1C1D21] focus:outline-none min-w-[120px] max-w-[240px] truncate"
+              title="Order Code: <Designer 2-lettered Code>-<Prospect 2-lettered Code>-<Order Title>"
             />
             <button
               onClick={() => handleCopyCode(order.orderNumber)}
-              className="text-slate-400 hover:text-slate-600 p-0.5 rounded"
-              title="Copy"
+              className="text-slate-400 hover:text-slate-600 p-0.5 rounded shrink-0"
+              title="Copy Order Code"
             >
               {copiedId ? (
                 <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -274,7 +283,18 @@ export function OrderDetail({
                 <Copy className="w-3.5 h-3.5" />
               )}
             </button>
-            {getStatusBadge(order.status)}
+            {!isDesigner && (
+              <button
+                onClick={handleSyncOrderCode}
+                className="text-slate-400 hover:text-[#1C1D21] p-0.5 rounded transition-colors shrink-0"
+                title="Format & Sync Order Code: <Designer>-<Prospect>-<Title>"
+              >
+                <RefreshCw className="w-3 h-3" />
+              </button>
+            )}
+            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border shrink-0 ${statusStyle.badgeClass}`}>
+              {statusStyle.label}
+            </span>
           </div>
 
           {/* Peek Switcher Controls & Close */}
@@ -334,8 +354,8 @@ export function OrderDetail({
           </div>
         </div>
 
-        {/* Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+        {/* Scrollable Body - with min-h-0 so it flexes & scrolls properly */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-5">
           {/* Editable Title */}
           <div>
             <input
@@ -346,10 +366,13 @@ export function OrderDetail({
               placeholder="Order Title"
               className="w-full text-lg sm:text-xl font-semibold text-[#1C1D21] bg-transparent border-b border-transparent hover:border-slate-200 focus:border-[#1C1D21] focus:outline-none transition-colors"
             />
-            <div className="flex items-center gap-4 text-xs text-[#6B7280] mt-1 font-mono">
-              <span className="flex items-center gap-1">
-                <Calendar className="w-3 h-3 text-slate-400" />
-                Due:
+            <div className="flex flex-wrap items-center gap-3 text-xs text-[#6B7280] mt-1.5 font-mono">
+              <span className="flex items-center gap-1.5 bg-slate-100/90 px-2.5 py-1 rounded-lg border border-slate-200/60 font-semibold text-[#1C1D21]">
+                <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                Created: {formatOrderDate(order.created_at)}
+              </span>
+              <span className="flex items-center gap-1 bg-white/70 px-2 py-1 rounded-lg border border-slate-200/50">
+                <span className="text-slate-500">Due:</span>
                 <input
                   type="date"
                   value={dueDate}
@@ -358,13 +381,39 @@ export function OrderDetail({
                     setDueDate(e.target.value);
                     triggerAutoSave({ due_date: new Date(e.target.value).getTime() });
                   }}
-                  className="bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none ml-1 cursor-pointer"
+                  className="bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none cursor-pointer font-sans text-xs"
                 />
               </span>
-              <span>
-                Created: {new Date(order.created_at).toLocaleDateString()}
+            </div>
+          </div>
+
+          {/* Specimen / Project Type Selector */}
+          <div className="glass-panel p-3.5 rounded-2xl flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">
+                Specimen / Project Type:
+              </span>
+              <span className="font-semibold text-[#1C1D21] bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200/80">
+                {specimenType}
               </span>
             </div>
+            {!isDesigner && (
+              <select
+                value={specimenType}
+                onChange={(e) => {
+                  const val = e.target.value as SpecimenType;
+                  setSpecimenType(val);
+                  triggerAutoSave({ specimen_type: val });
+                }}
+                className="bg-white border border-slate-200 rounded-xl text-xs px-2.5 py-1 text-slate-800 font-medium focus:outline-none cursor-pointer"
+              >
+                {SPECIMEN_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Escalation Alert */}
@@ -539,23 +588,26 @@ export function OrderDetail({
             <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold flex items-center gap-1.5">
               <History className="w-3.5 h-3.5 text-slate-500" /> Chronological Status History
             </span>
-            <div className="space-y-1.5 border-l-2 border-slate-200 pl-3 ml-1">
+            <div className="space-y-2 border-l-2 border-slate-200 pl-3 ml-1">
               <div>
                 <div className="font-semibold text-xs text-[#1C1D21]">
-                  Intake: SUBMITTED_TO_ADMIN
+                  Intake: Inbox
                 </div>
-                <div className="text-[10px] text-slate-400 font-mono">
-                  {new Date(order.created_at).toLocaleString()}
+                <div className="text-[11px] text-slate-500 font-mono">
+                  {formatOrderDate(order.created_at)}
                 </div>
               </div>
 
-              {order.status !== 'SUBMITTED_TO_ADMIN' && (
+              {order.updated_at && order.updated_at !== order.created_at && (
                 <div className="pt-1">
-                  <div className="font-semibold text-xs text-indigo-700">
-                    Active Phase: {order.status}
+                  <div className="font-semibold text-xs text-[#1C1D21] flex items-center gap-1.5">
+                    <span>Active Phase:</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] border font-semibold ${statusStyle.badgeClass}`}>
+                      {statusStyle.label}
+                    </span>
                   </div>
-                  <div className="text-[10px] text-slate-400 font-mono">
-                    Updated {new Date(order.updated_at).toLocaleString()}
+                  <div className="text-[11px] text-slate-500 font-mono">
+                    Updated {formatOrderDate(order.updated_at)}
                   </div>
                 </div>
               )}
@@ -605,11 +657,8 @@ export function OrderDetail({
                     <span className="font-semibold text-[#1C1D21]">
                       {rev.authorName} ({rev.authorRole})
                     </span>
-                    <span className="text-[10px] text-slate-400">
-                      {new Date(rev.timestamp).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {formatOrderDate(rev.timestamp)}
                     </span>
                   </div>
                   <p className="text-slate-600">{rev.message}</p>
@@ -639,7 +688,7 @@ export function OrderDetail({
         </div>
 
         {/* Action Bar */}
-        <div className="p-3.5 bg-white/70 border-t border-slate-200/60 flex items-center justify-between gap-3 shrink-0">
+        <div className="p-3.5 bg-white/70 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div>
             {isAdmin && (
               <button
@@ -654,8 +703,34 @@ export function OrderDetail({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            {isAdmin && order.status === 'SUBMITTED_TO_ADMIN' && (
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Admin 5 Canonical Status Selector */}
+            {isAdmin && (
+              <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200/60">
+                <span className="text-[10px] font-mono uppercase text-slate-400 font-bold px-1">Phase:</span>
+                {ORDER_STATUSES.map((st) => {
+                  const isCurrent = normalizeStatus(order.status) === st;
+                  const stStyle = getStatusStyle(st);
+                  return (
+                    <button
+                      key={st}
+                      type="button"
+                      disabled={isSubmitting || isCurrent}
+                      onClick={() => handleStatusTransition(st)}
+                      className={`px-2 py-0.5 rounded-lg text-xs font-medium transition-all ${
+                        isCurrent
+                          ? `${stStyle.badgeClass} ring-1 ring-black/10`
+                          : 'text-slate-500 hover:text-[#1C1D21] hover:bg-white'
+                      }`}
+                    >
+                      {st}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {isAdmin && (order.status === 'Inbox' || order.status === 'SUBMITTED_TO_ADMIN') && (
               <Button
                 size="sm"
                 variant="danger"
@@ -665,7 +740,7 @@ export function OrderDetail({
               </Button>
             )}
 
-            {isAgent && order.status === 'RETURNED_TO_AGENT' && (
+            {isAgent && (order.status === 'Backlog' || order.status === 'RETURNED_TO_AGENT') && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-amber-800">
                   Returned for clarification
@@ -673,20 +748,20 @@ export function OrderDetail({
                 <Button
                   size="sm"
                   variant="primary"
-                  onClick={() => handleStatusTransition('SUBMITTED_TO_ADMIN')}
+                  onClick={() => handleStatusTransition('Inbox')}
                 >
                   Re-Submit
                 </Button>
               </div>
             )}
 
-            {isDesigner && order.status === 'ASSIGNED_TO_DESIGNER' && (
+            {isDesigner && (order.status === 'Inbox' || order.status === 'ASSIGNED_TO_DESIGNER') && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-500">Ready to start</span>
                 <Button
                   size="sm"
                   variant="primary"
-                  onClick={() => handleStatusTransition('IN_PRODUCTION')}
+                  onClick={() => handleStatusTransition('In progress')}
                 >
                   <Play className="w-3 h-3 mr-1" /> Start Production
                 </Button>
@@ -694,25 +769,27 @@ export function OrderDetail({
             )}
 
             {isDesigner &&
-              (order.status === 'IN_PRODUCTION' || order.status === 'IN_REVISION') && (
+              (order.status === 'In progress' ||
+                order.status === 'IN_PRODUCTION' ||
+                order.status === 'IN_REVISION') && (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-500">In Production</span>
                   <Button
                     size="sm"
                     variant="primary"
-                    onClick={() => handleStatusTransition('ADMIN_REVIEW')}
+                    onClick={() => handleStatusTransition('In Review')}
                   >
                     Submit for Review
                   </Button>
                 </div>
               )}
 
-            {isAdmin && order.status === 'ADMIN_REVIEW' && (
+            {isAdmin && (order.status === 'In Review' || order.status === 'ADMIN_REVIEW') && (
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => handleStatusTransition('IN_REVISION')}
+                  onClick={() => handleStatusTransition('Backlog')}
                   className="text-amber-700"
                 >
                   <RotateCcw className="w-3 h-3 mr-1" /> Request Fix
@@ -720,17 +797,18 @@ export function OrderDetail({
                 <Button
                   size="sm"
                   variant="primary"
-                  onClick={() => handleStatusTransition('IN_PRODUCTION')}
+                  onClick={() => handleStatusTransition('Delivered')}
                 >
-                  <Check className="w-3 h-3 mr-1" /> Approve
+                  <Check className="w-3 h-3 mr-1" /> Approve & Deliver
                 </Button>
               </div>
             )}
 
             {isDesigner &&
-              (order.status === 'IN_PRODUCTION' ||
+              (order.status === 'In progress' ||
+                order.status === 'IN_PRODUCTION' ||
                 order.status === 'ADMIN_REVIEW' ||
-                order.status === 'ASSIGNED_TO_DESIGNER') && (
+                order.status === 'In Review') && (
                 <Button
                   size="sm"
                   variant="primary"
@@ -740,20 +818,23 @@ export function OrderDetail({
                 </Button>
               )}
 
-            {isAdmin && order.status === 'DELIVERED' && (
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-slate-500">
-                  Code: <code className="font-mono">{order.delivery_code}</code>
-                </span>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => handleStatusTransition('COMPLETED')}
-                >
-                  <CheckCircle className="w-3 h-3 mr-1" /> Complete Order
-                </Button>
-              </div>
-            )}
+            {(isAdmin || isAgent) &&
+              (order.status === 'Delivered' || order.status === 'DELIVERED') && (
+                <div className="flex items-center gap-3">
+                  {order.delivery_code && (
+                    <span className="text-xs text-slate-500">
+                      Code: <code className="font-mono font-bold text-slate-700">{order.delivery_code}</code>
+                    </span>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => handleStatusTransition('Delivered')}
+                  >
+                    <CheckCircle className="w-3 h-3 mr-1" /> Completed
+                  </Button>
+                </div>
+              )}
           </div>
         </div>
       </div>

@@ -43,6 +43,7 @@ export function LeftSidebar({
   const setActiveEntity = useUIStore((s) => s.setActiveEntity);
   const currentUser = useUIStore((s) => s.currentUser);
   const setCurrentUser = useUIStore((s) => s.setCurrentUser);
+  const openSettings = useUIStore((s) => s.openSettings);
 
   const isDesigner = currentUser?.role === 'designer';
   const isOwner =
@@ -114,21 +115,25 @@ export function LeftSidebar({
         {/* Compact bottom profile */}
         <div className="flex flex-col items-center gap-2">
           {currentUser && (
-            currentUser.photoUrl ? (
-              <img
-                src={currentUser.photoUrl}
-                alt={currentUser.displayName}
-                title={`${currentUser.displayName} (${currentUser.role})`}
-                className="w-7 h-7 rounded-full object-cover border border-slate-200"
-              />
-            ) : (
-              <div
-                title={`${currentUser.displayName} (${currentUser.role})`}
-                className="w-7 h-7 rounded-full bg-[#1C1D21] text-white flex items-center justify-center text-[10px] font-bold font-mono"
-              >
-                {currentUser.initials || currentUser.displayName.slice(0, 2).toUpperCase()}
-              </div>
-            )
+            <button
+              onClick={openSettings}
+              title={`Workspace Settings (${currentUser.displayName})`}
+              className="cursor-pointer group focus:outline-none"
+            >
+              {currentUser.photoUrl ? (
+                <img
+                  src={currentUser.photoUrl}
+                  alt={currentUser.displayName}
+                  className="w-8 h-8 rounded-full object-cover border border-slate-200 group-hover:ring-2 group-hover:ring-[#1C1D21] transition-all"
+                />
+              ) : (
+                <div
+                  className="w-8 h-8 rounded-full bg-[#1C1D21] text-white flex items-center justify-center text-[10px] font-bold font-mono group-hover:ring-2 group-hover:ring-[#1C1D21] group-hover:scale-105 transition-all"
+                >
+                  {currentUser.initials || currentUser.displayName.slice(0, 2).toUpperCase()}
+                </div>
+              )}
+            </button>
           )}
           <button
             onClick={handleSignOut}
@@ -201,29 +206,34 @@ export function LeftSidebar({
       {/* Profile & Logout in the bottom of the left sidebar */}
       <div className="p-3 border-t border-slate-200/60 bg-white/40">
           <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200/60">
-            <div className="flex items-center gap-2.5 overflow-hidden">
+            <button
+              type="button"
+              onClick={openSettings}
+              title="Click to open Workspace Settings (Account, Appearance, App, Terminate)"
+              className="flex items-center gap-2.5 overflow-hidden text-left cursor-pointer group focus:outline-none flex-1 mr-1"
+            >
               {currentUser?.photoUrl ? (
                 <img
                   src={currentUser.photoUrl}
                   alt={currentUser.displayName}
-                  className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0"
+                  className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0 group-hover:ring-2 group-hover:ring-[#1C1D21] transition-all"
                 />
               ) : (
-                <div className="w-7 h-7 rounded-full bg-[#1C1D21] text-white flex items-center justify-center text-[10px] font-bold font-mono shrink-0">
+                <div className="w-8 h-8 rounded-full bg-[#1C1D21] text-white flex items-center justify-center text-[10px] font-bold font-mono shrink-0 group-hover:ring-2 group-hover:ring-[#1C1D21] transition-all">
                   {currentUser?.initials ||
                     currentUser?.displayName?.slice(0, 2).toUpperCase() ||
                     'AD'}
                 </div>
               )}
               <div className="overflow-hidden">
-                <div className="text-xs font-medium text-[#1C1D21] truncate">
+                <div className="text-xs font-semibold text-[#1C1D21] truncate group-hover:underline">
                   {currentUser?.displayName}
                 </div>
                 <div className="text-[10px] font-mono uppercase text-[#6B7280] truncate">
-                  {currentUser?.role?.replace('_', ' ')}
+                  {currentUser?.role?.replace('_', ' ')} • Settings
                 </div>
               </div>
-            </div>
+            </button>
 
             <button
               onClick={handleSignOut}

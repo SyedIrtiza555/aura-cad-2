@@ -16,7 +16,20 @@ export interface UserProfile {
   approvedBy?: string;
 }
 
+export type SpecimenType =
+  | 'Ring'
+  | 'Bracelet'
+  | 'Pendant'
+  | 'Earring'
+  | 'Grills'
+  | 'Necklace';
+
 export type OrderStatus =
+  | 'Inbox'
+  | 'In progress'
+  | 'In Review'
+  | 'Delivered'
+  | 'Backlog'
   | 'SUBMITTED_TO_ADMIN'
   | 'RETURNED_TO_AGENT'
   | 'ASSIGNED_TO_DESIGNER'
@@ -50,6 +63,7 @@ export interface Order {
   id: string;
   orderNumber: string;
   title: string;
+  specimen_type?: SpecimenType;
   client_name: string;
   client_phone?: string; // REDACTED for designer
   agreed_price?: number; // REDACTED for designer

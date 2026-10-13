@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import type { Order, UserProfile, OrderStatus } from '../../../shared/types';
 import { useUIStore } from '../../../shared/store';
-import { Badge } from '../../../shared/ui';
 import { copyToClipboard } from '../../../shared/notifications';
+import { getStatusStyle, formatOrderDate } from '../../../shared/formatters';
 import {
   ArrowUpDown,
   ArrowUp,
@@ -89,25 +89,13 @@ export function TableView({ orders, onDeleteOrder }: TableViewProps) {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const getStatusBadge = (status: OrderStatus) => {
-    switch (status) {
-      case 'SUBMITTED_TO_ADMIN':
-        return <Badge variant="warning">Submitted</Badge>;
-      case 'RETURNED_TO_AGENT':
-        return <Badge variant="danger">Returned</Badge>;
-      case 'ASSIGNED_TO_DESIGNER':
-        return <Badge variant="info">Assigned</Badge>;
-      case 'IN_PRODUCTION':
-        return <Badge variant="purple">Production</Badge>;
-      case 'ADMIN_REVIEW':
-        return <Badge variant="warning">Review</Badge>;
-      case 'IN_REVISION':
-        return <Badge variant="danger">Revision</Badge>;
-      case 'DELIVERED':
-        return <Badge variant="info">Delivered</Badge>;
-      case 'COMPLETED':
-        return <Badge variant="success">Completed</Badge>;
-    }
+  const renderStatusBadge = (status: OrderStatus) => {
+    const stStyle = getStatusStyle(status);
+    return (
+      <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${stStyle.badgeClass}`}>
+        {stStyle.label}
+      </span>
+    );
   };
 
   const renderSortIcon = (field: SortField) => {
@@ -261,8 +249,13 @@ export function TableView({ orders, onDeleteOrder }: TableViewProps) {
                     </td>
 
                     <td className="py-2.5 px-4">
-                      <div className="font-medium text-[#1C1D21] line-clamp-1">
-                        {order.title}
+                      <div className="font-medium text-[#1C1D21] line-clamp-1 flex items-center gap-1.5">
+                        <span>{order.title}</span>
+                        {order.specimen_type && (
+                          <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
+                            {order.specimen_type}
+                          </span>
+                        )}
                       </div>
                     </td>
 
@@ -289,16 +282,13 @@ export function TableView({ orders, onDeleteOrder }: TableViewProps) {
                     </td>
 
                     <td className="py-2.5 px-4 whitespace-nowrap">
-                      {getStatusBadge(order.status)}
+                      {renderStatusBadge(order.status)}
                     </td>
 
-                    <td className="py-2.5 px-4 text-slate-400 font-mono text-[11px] whitespace-nowrap">
+                    <td className="py-2.5 px-4 text-slate-500 font-mono text-[11px] whitespace-nowrap">
                       <div className="flex items-center gap-1">
                         <Calendar className="w-3 h-3 text-slate-400" />
-                        {new Date(order.created_at).toLocaleDateString([], {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
+                        {formatOrderDate(order.created_at)}
                       </div>
                     </td>
 

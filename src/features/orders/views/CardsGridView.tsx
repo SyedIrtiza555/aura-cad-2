@@ -1,16 +1,17 @@
-import type { Order, UserProfile, OrderStatus } from '../../../shared/types';
+import type { Order, UserProfile } from '../../../shared/types';
 import { useUIStore } from '../../../shared/store';
-import { Badge, DeleteConfirmModal, ImageCarousel } from '../../../shared/ui';
+import { DeleteConfirmModal, ImageCarousel } from '../../../shared/ui';
 import { useState } from 'react';
 import {
   User,
   DollarSign,
-  Clock,
   PanelRightOpen,
   AppWindow,
   Maximize2,
   Trash2,
+  Calendar,
 } from 'lucide-react';
+import { getStatusStyle, formatOrderDate } from '../../../shared/formatters';
 
 interface CardsGridViewProps {
   orders: Order[];
@@ -29,33 +30,11 @@ export function CardsGridView({ orders, onDeleteOrder }: CardsGridViewProps) {
   const isDesigner = currentUser?.role === 'designer';
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'owner';
 
-  const getStatusBadge = (status: OrderStatus) => {
-    switch (status) {
-      case 'SUBMITTED_TO_ADMIN':
-        return <Badge variant="warning">Submitted</Badge>;
-      case 'RETURNED_TO_AGENT':
-        return <Badge variant="danger">Returned</Badge>;
-      case 'ASSIGNED_TO_DESIGNER':
-        return <Badge variant="info">Assigned</Badge>;
-      case 'IN_PRODUCTION':
-        return <Badge variant="purple">Production</Badge>;
-      case 'ADMIN_REVIEW':
-        return <Badge variant="warning">Review</Badge>;
-      case 'IN_REVISION':
-        return <Badge variant="danger">Revision</Badge>;
-      case 'DELIVERED':
-        return <Badge variant="info">Delivered</Badge>;
-      case 'COMPLETED':
-        return <Badge variant="success">Completed</Badge>;
-    }
-  };
-
   return (
     <div className="flex-1 overflow-y-auto p-5 pb-24 bg-[#F5F5F7] select-none">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {orders.map((order) => {
           const isSelected = selectedOrderId === order.id;
-          const daysOld = Math.max(1, Math.ceil((Date.now() - order.created_at) / 86400000));
 
           return (
             <div
@@ -70,10 +49,12 @@ export function CardsGridView({ orders, onDeleteOrder }: CardsGridViewProps) {
               <div className="space-y-2.5">
                 {/* Header */}
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-bold text-[#1C1D21]">
+                  <span className="font-mono text-xs font-bold text-[#1C1D21] truncate max-w-[170px]">
                     {order.orderNumber}
                   </span>
-                  {getStatusBadge(order.status)}
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusStyle(order.status).badgeClass}`}>
+                    {getStatusStyle(order.status).label}
+                  </span>
                 </div>
 
                 {/* Photo Carousel Thumbnail */}
@@ -83,9 +64,16 @@ export function CardsGridView({ orders, onDeleteOrder }: CardsGridViewProps) {
                   {order.title}
                 </h4>
 
-                <div className="text-xs text-[#6B7280] flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="truncate">{order.client_name}</span>
+                <div className="flex items-center justify-between text-xs">
+                  <div className="text-[#6B7280] flex items-center gap-1.5 truncate max-w-[150px]">
+                    <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="truncate">{order.client_name}</span>
+                  </div>
+                  {order.specimen_type && (
+                    <span className="text-[10px] font-medium bg-slate-100 px-2 py-0.5 rounded-md text-slate-600 border border-slate-200/60 shrink-0">
+                      {order.specimen_type}
+                    </span>
+                  )}
                 </div>
 
                 <p className="text-xs text-[#4B5563] line-clamp-3 leading-relaxed bg-slate-50/70 p-2.5 rounded-2xl border border-slate-100">
@@ -126,9 +114,9 @@ export function CardsGridView({ orders, onDeleteOrder }: CardsGridViewProps) {
                 </div>
 
                 <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    <span>{daysOld}d</span>
+                  <div className="flex items-center gap-1 text-slate-500">
+                    <Calendar className="w-3 h-3 text-slate-400" />
+                    <span>{formatOrderDate(order.created_at)}</span>
                   </div>
 
                   <div

@@ -12,6 +12,7 @@ import type { Order, UserProfile, OrderStatus, UserRole } from '../../shared/typ
 import { useUIStore } from '../../shared/store';
 import { Button, Input, Badge, DeleteConfirmModal } from '../../shared/ui';
 import { dispatchNativeNotification } from '../../shared/notifications';
+import { formatOrderCode, normalizeStatus } from '../../shared/formatters';
 import { OrderDetail } from './OrderDetail';
 import { NewOrderModal } from './NewOrderModal';
 import { SafetyCheckModal } from './SafetyCheckModal';
@@ -82,7 +83,9 @@ export function OrderDashboard({ teamUsers }: { teamUsers: UserProfile[] }) {
       order.client_name.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus =
-      statusFilter === 'ALL' || order.status === statusFilter;
+      statusFilter === 'ALL' ||
+      order.status === statusFilter ||
+      normalizeStatus(order.status) === statusFilter;
 
     return matchesSearch && matchesStatus;
   });
@@ -91,9 +94,13 @@ export function OrderDashboard({ teamUsers }: { teamUsers: UserProfile[] }) {
 
   const handleCreateOrder = async (orderData: Partial<Order>) => {
     const newId = `ord-${Date.now()}`;
-    const newOrderNumber = `AURA-${new Date().getFullYear()}-${String(
-      orders.length + 1
-    ).padStart(3, '0')}`;
+    const newOrderNumber =
+      orderData.orderNumber ||
+      formatOrderCode(
+        orderData.assigned_designer_initials,
+        orderData.client_name || 'Client',
+        orderData.title || 'Order'
+      );
 
     const fullOrder: Order = {
       ...(orderData as Order),
@@ -130,9 +137,32 @@ export function OrderDashboard({ teamUsers }: { teamUsers: UserProfile[] }) {
     if (!targetOrder) return;
 
     const previousStatus = targetOrder.status;
+
+    // Automatically synchronize order code if designer or prospect or title changes
+    let nextOrderNumber = updatedFields.orderNumber || targetOrder.orderNumber;
+    if (
+      updatedFields.assigned_designer_initials !== undefined ||
+      updatedFields.client_name !== undefined ||
+      updatedFields.title !== undefined
+    ) {
+      const dInitials =
+        updatedFields.assigned_designer_initials !== undefined
+          ? updatedFields.assigned_designer_initials
+          : targetOrder.assigned_designer_initials;
+      const cName =
+        updatedFields.client_name !== undefined
+          ? updatedFields.client_name
+          : targetOrder.client_name;
+      const oTitle =
+        updatedFields.title !== undefined ? updatedFields.title : targetOrder.title;
+      nextOrderNumber =
+        updatedFields.orderNumber || formatOrderCode(dInitials, cName, oTitle);
+    }
+
     const merged: Order = {
       ...targetOrder,
       ...updatedFields,
+      orderNumber: nextOrderNumber,
     };
 
     setOrders((prev) => prev.map((o) => (o.id === merged.id ? merged : o)));

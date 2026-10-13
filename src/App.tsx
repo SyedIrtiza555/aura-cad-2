@@ -7,6 +7,7 @@ import type { UserProfile } from './shared/types';
 import { AuthView } from './features/auth/AuthView';
 import { WaitingRoomView } from './features/auth/WaitingRoomView';
 import { TeamGovernanceModal } from './features/team/TeamGovernanceModal';
+import { GlobalSettingsModal } from './features/settings/GlobalSettingsModal';
 import { OrderDashboard } from './features/orders/OrderDashboard';
 import { UpdaterBanner } from './features/updater/UpdaterBanner';
 
@@ -14,13 +15,20 @@ export function App() {
   const currentUser = useUIStore((s) => s.currentUser);
   const setCurrentUser = useUIStore((s) => s.setCurrentUser);
 
+  const [authLoading, setAuthLoading] = useState(true);
   const [teamUsers, setTeamUsers] = useState<UserProfile[]>([]);
 
   // Sync authentic Firebase Auth state & Real-Time Profile Listener
   useEffect(() => {
     let unsubUserDoc: (() => void) | null = null;
+    console.log('[Aura Auth Trace] Initializing Firebase Auth observer...');
 
     const unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log(
+        '[Aura Auth Trace] onAuthStateChanged fired. User:',
+        firebaseUser ? `${firebaseUser.email} (${firebaseUser.uid})` : 'null (Unauthenticated)'
+      );
+
       if (unsubUserDoc) {
         unsubUserDoc();
         unsubUserDoc = null;
@@ -38,6 +46,7 @@ export function App() {
           ]);
 
           if (!snap || !snap.exists()) {
+            console.log('[Aura Auth Trace] User doc not found or timed out, generating synthesized fallback profile');
             const initialRole = isOwnerEmail ? 'owner' : 'unassigned';
             const initialStatus = initialRole === 'owner' ? 'active' : 'pending_approval';
             const fallbackProfile: UserProfile = {
@@ -69,7 +78,7 @@ export function App() {
             }
           }
         } catch (e) {
-          console.warn('Profile initialization fallback:', e);
+          console.warn('[Aura Auth Trace] Profile initialization fallback:', e);
           const initialRole = isOwnerEmail ? 'owner' : 'unassigned';
           setCurrentUser({
             uid: firebaseUser.uid,
@@ -102,6 +111,9 @@ export function App() {
       } else {
         setCurrentUser(null);
       }
+
+      // Conclude initial auth verification and reveal UI without jumping
+      setAuthLoading(false);
     });
 
     return () => {
@@ -126,12 +138,27 @@ export function App() {
     return () => unsubTeam();
   }, []);
 
-  // 1. Unauthenticated -> Show clean Auth View
+  // 1. Initial Authentication Check -> Prevent Login Screen Flash
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F7] flex flex-col justify-center items-center p-6 select-none">
+        <div className="w-12 h-12 rounded-2xl bg-[#1C1D21] flex items-center justify-center text-white font-mono text-base font-bold shadow-xl mb-4 animate-pulse">
+          AD
+        </div>
+        <div className="flex items-center gap-2 text-xs text-[#6B7280] font-medium">
+          <span className="w-3.5 h-3.5 border-2 border-slate-300 border-t-[#1C1D21] rounded-full animate-spin" />
+          <span>Restoring secure agency workspace...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Unauthenticated -> Show clean Auth View
   if (!currentUser) {
     return <AuthView />;
   }
 
-  // 2. Unassigned or pending approval -> Locked to Waiting Room View
+  // 3. Unassigned or pending approval -> Locked to Waiting Room View
   if (currentUser.role === 'unassigned' || currentUser.status === 'pending_approval') {
     return <WaitingRoomView />;
   }
@@ -148,6 +175,9 @@ export function App() {
 
       {/* Team Governance Modal */}
       <TeamGovernanceModal />
+
+      {/* Global Workspace Settings Modal */}
+      <GlobalSettingsModal />
     </div>
   );
 }

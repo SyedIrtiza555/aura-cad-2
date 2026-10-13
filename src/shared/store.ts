@@ -59,6 +59,11 @@ interface UIState {
   openEscalateModal: (order: Order) => void;
   closeEscalateModal: () => void;
 
+  // Global Settings Modal
+  isSettingsOpen: boolean;
+  openSettings: () => void;
+  closeSettings: () => void;
+
   // Filter & Search
   searchQuery: string;
   setSearchQuery: (query: string) => void;
@@ -120,6 +125,10 @@ export const useUIStore = create<UIState>((set) => ({
     set({ isEscalateModalOpen: true, escalatingOrder: order }),
   closeEscalateModal: () =>
     set({ isEscalateModalOpen: false, escalatingOrder: null }),
+
+  isSettingsOpen: false,
+  openSettings: () => set({ isSettingsOpen: true }),
+  closeSettings: () => set({ isSettingsOpen: false }),
 
   searchQuery: '',
   setSearchQuery: (query) => set({ searchQuery: query }),

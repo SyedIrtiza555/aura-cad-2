@@ -4,6 +4,7 @@ import { db } from '../../shared/firebase';
 import type { Order, OrderSnapshot } from '../../shared/types';
 import { History, Calendar, Clock } from 'lucide-react';
 import { Badge } from '../../shared/ui';
+import { formatOrderDate, getStatusStyle } from '../../shared/formatters';
 
 interface TimeMachineSliderProps {
   order: Order;
@@ -22,7 +23,7 @@ export function TimeMachineSlider({ order, onSnapshotSelect }: TimeMachineSlider
     Math.ceil((Date.now() - orderCreatedAt) / (1000 * 60 * 60 * 24))
   );
 
-  // Lazy Querying: Snapshots are fetched ONLY when the Time Machine component mounts
+  // Lazy Querying: Snapshots are fetched whenever order id, status, or updated_at changes
   useEffect(() => {
     let isCancelled = false;
 
@@ -41,6 +42,20 @@ export function TimeMachineSlider({ order, onSnapshotSelect }: TimeMachineSlider
             list.push(doc.data() as OrderSnapshot);
           });
           list.sort((a, b) => a.day_number - b.day_number);
+
+          // Guarantee the latest day checkpoint reflects the live order status
+          if (list.length > 0) {
+            const lastIdx = list.length - 1;
+            list[lastIdx] = {
+              ...list[lastIdx],
+              snapshot_payload: {
+                ...list[lastIdx].snapshot_payload,
+                status: order.status,
+                project_brief: order.project_brief,
+              },
+            };
+          }
+
           setSnapshots(list);
           setSelectedIndex(list.length - 1);
         } else if (!isCancelled) {
@@ -55,10 +70,10 @@ export function TimeMachineSlider({ order, onSnapshotSelect }: TimeMachineSlider
               timestamp: dayDate.getTime(),
               snapshot_payload: {
                 status:
-                  dayNum === 1
-                    ? 'SUBMITTED_TO_ADMIN'
-                    : dayNum === daysTotal
+                  dayNum === daysTotal
                     ? order.status
+                    : dayNum === 1
+                    ? 'SUBMITTED_TO_ADMIN'
                     : 'IN_PRODUCTION',
                 project_brief: order.project_brief,
                 admin_feedback: dayNum > 1 ? order.admin_feedback : undefined,
@@ -79,15 +94,19 @@ export function TimeMachineSlider({ order, onSnapshotSelect }: TimeMachineSlider
     return () => {
       isCancelled = true;
     };
-  }, [order.id, order.created_at, daysTotal]);
+  }, [order.id, order.created_at, daysTotal, order.status, order.updated_at]);
 
   const activeSnapshot = snapshots[selectedIndex];
+  const isLatestDay = selectedIndex === Math.max(0, snapshots.length - 1);
+  const activeStatus = isLatestDay ? order.status : (activeSnapshot?.snapshot_payload.status || order.status);
+  const statusStyle = getStatusStyle(activeStatus);
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value, 10);
     setSelectedIndex(val);
     if (onSnapshotSelect && snapshots[val]) {
-      onSnapshotSelect(snapshots[val].snapshot_payload);
+      const payload = isLatestDay ? { ...snapshots[val].snapshot_payload, status: order.status } : snapshots[val].snapshot_payload;
+      onSnapshotSelect(payload);
     }
   };
 
@@ -124,24 +143,24 @@ export function TimeMachineSlider({ order, onSnapshotSelect }: TimeMachineSlider
             />
             <div className="flex justify-between text-[10px] text-slate-500 font-mono">
               <span>Day 1 (Intake)</span>
-              <span>Day {snapshots.length} (Current)</span>
+              <span>Day {snapshots.length} (Current: {statusStyle.label})</span>
             </div>
           </div>
 
           {activeSnapshot && (
             <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2.5 text-xs space-y-1.5">
               <div className="flex items-center justify-between text-slate-400">
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-3 h-3 text-indigo-400" />
-                  {activeSnapshot.date_key}
+                <span className="flex items-center gap-1.5 font-mono text-[11px] text-slate-300">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                  {formatOrderDate(activeSnapshot.timestamp)}
                 </span>
-                <span className="font-mono text-indigo-300 font-medium">
-                  Status: {activeSnapshot.snapshot_payload.status}
+                <span className={`px-2 py-0.5 rounded-full text-[11px] border font-semibold ${statusStyle.badgeClass}`}>
+                  {statusStyle.label}
                 </span>
               </div>
               <div className="text-[11px] text-slate-400 line-clamp-2">
                 <span className="text-slate-500">Brief state: </span>
-                {activeSnapshot.snapshot_payload.project_brief}
+                {activeSnapshot.snapshot_payload.project_brief || order.project_brief || 'No specifications provided.'}
               </div>
             </div>
           )}
