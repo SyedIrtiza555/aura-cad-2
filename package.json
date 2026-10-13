@@ -1,13 +1,15 @@
 {
   "name": "aura-cad-2",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test": "vitest run",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "release": "bash scripts/release.sh"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.2.0",

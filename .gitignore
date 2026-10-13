@@ -1,4 +1,10 @@
-# Logs
+# Environment & Secrets
+.env
+.env*.local
+users.json
+firebase-debug.log*
+
+# Logs & Telemetry
 logs
 *.log
 npm-debug.log*
@@ -6,13 +12,21 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+agy-feedback.json
+agy-triage.json
 
+# Dependencies & Build artifacts
 node_modules
 dist
 dist-ssr
 *.local
 
-# Editor directories and files
+# Tauri & Rust artifacts
+src-tauri/target/
+src-tauri/gen/
+*.bundle/
+
+# Editor & OS files
 .vscode/*
 !.vscode/extensions.json
 .idea
