@@ -39,7 +39,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/TheAuditLabs/aura-desk/releases/latest/download/latest.json"
+        "https://github.com/SyedIrtiza555/aura-cad-2/releases/latest/download/latest.json"
       ]
     }
   }
