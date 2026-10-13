@@ -3,7 +3,6 @@ import { getAuth } from 'firebase/auth';
 import {
   initializeFirestore,
   persistentLocalCache,
-  persistentMultipleTabManager,
 } from 'firebase/firestore';
 
 // Live Firebase configuration connected to Google Cloud project aura-cad-2
