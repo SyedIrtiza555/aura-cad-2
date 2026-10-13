@@ -22,9 +22,16 @@ export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 // Initialize Firebase Auth
 export const auth = getAuth(app);
 
-// Initialize Cloud Firestore with offline-resilient persistentLocalCache
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager(),
-  }),
-});
+// Initialize Cloud Firestore with offline-resilient cache and graceful fallback
+let firestoreDb;
+try {
+  firestoreDb = initializeFirestore(app, {
+    localCache: persistentLocalCache(),
+  });
+} catch (err) {
+  console.warn('[Aura Desk] Persistent cache initialization failed, falling back to default:', err);
+  firestoreDb = initializeFirestore(app, {});
+}
+
+export const db = firestoreDb;
+
