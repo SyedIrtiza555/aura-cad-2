@@ -1,0 +1,17 @@
+{
+  "feedback": [
+    {
+      "selector": ".grid > div:first-child .relative.w-full.h-36",
+      "text": "ImageCarousel (up to 5 pictures)",
+      "classes": "relative w-full h-36 rounded-2xl overflow-hidden bg-slate-950 border border-slate-200/80 group",
+      "comment": "Order Cards Grid, Table, and Detail views now embed interactive multi-image carousels with smooth chevron controls, index counter, and responsive modal lightboxes."
+    },
+    {
+      "selector": "aside > div > div:nth-child(2) > button:nth-child(6)",
+      "text": "Team Governance",
+      "classes": "w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium",
+      "comment": "Verified LeftSidebar deduplication: single unified Team Governance nav item with active badge counter and avatar preview."
+    }
+  ],
+  "lastUpdated": "2026-10-13T16:30:36.016Z"
+}

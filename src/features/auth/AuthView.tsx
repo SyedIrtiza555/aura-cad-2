@@ -5,7 +5,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../shared/firebase';
-import { Button, Input } from '../../shared/ui';
+import { Button, Input, ImageCarousel } from '../../shared/ui';
 import { LogIn, UserPlus } from 'lucide-react';
 import type { UserProfile } from '../../shared/types';
 import { useUIStore } from '../../shared/store';
@@ -34,6 +34,7 @@ export function AuthView() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [photos, setPhotos] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -44,10 +45,10 @@ export function AuthView() {
 
     try {
       if (isSignUp) {
-        // 1. Create user in Firebase Auth with 12s timeout
+        // 1. Create user in Firebase Auth with 8s timeout
         const cred = await withTimeout(
           createUserWithEmailAndPassword(auth, email.trim(), password),
-          12000,
+          8000,
           'Authentication request timed out. Please check your network and verify Firebase Auth is enabled in the Firebase console.'
         );
 
@@ -64,38 +65,33 @@ export function AuthView() {
           role: isOwnerEmail ? 'owner' : 'unassigned',
           status: isOwnerEmail ? 'active' : 'pending_approval',
           initials,
+          photoUrl: photos[0] || undefined,
+          photos: photos.length > 0 ? photos : undefined,
           createdAt: Date.now(),
         };
 
-        // 2. Persist to Firestore
-        try {
-          await withTimeout(
-            setDoc(doc(db, 'users', cred.user.uid), newProfile),
-            5000,
-            'Profile save timed out'
-          );
-        } catch (saveErr) {
-          console.warn('[Aura Desk] Firestore profile save warning:', saveErr);
-        }
+        // 2. Persist to Firestore in background without blocking UI
+        setDoc(doc(db, 'users', cred.user.uid), newProfile).catch((err) => {
+          console.warn('[Aura Desk] Background profile save warning:', err);
+        });
 
         setCurrentUser(newProfile);
       } else {
-        // 1. Sign in with 12s timeout
+        // 1. Sign in with 8s timeout
         const cred = await withTimeout(
           signInWithEmailAndPassword(auth, email.trim(), password),
-          12000,
+          8000,
           'Sign in request timed out. Please check your network or credentials.'
         );
 
-        // 2. Fetch profile from Firestore with 5s timeout; use fallback if still syncing
+        // 2. Fetch profile from Firestore with 2s timeout; use instant fallback if syncing
         let profile: UserProfile | null = null;
         try {
-          const snap = await withTimeout(
+          const snap = await Promise.race([
             getDoc(doc(db, 'users', cred.user.uid)),
-            5000,
-            'Profile read timed out'
-          );
-          if (snap.exists()) {
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+          ]);
+          if (snap && snap.exists()) {
             profile = snap.data() as UserProfile;
           }
         } catch (fetchErr) {
@@ -114,11 +110,7 @@ export function AuthView() {
             initials: (cred.user.displayName || userEmail || 'TM').slice(0, 2).toUpperCase(),
             createdAt: Date.now(),
           };
-          try {
-            await setDoc(doc(db, 'users', cred.user.uid), profile);
-          } catch {
-            // Ignored if offline
-          }
+          setDoc(doc(db, 'users', cred.user.uid), profile, { merge: true }).catch(() => {});
         }
 
         setCurrentUser(profile);
@@ -130,7 +122,7 @@ export function AuthView() {
         msg = err.message;
         // Translate common Firebase codes into clear human messages
         if (msg.includes('auth/invalid-email')) {
-          msg = 'Invalid email address format (e.g. name@domain.com). Note: ".local" domains may be rejected by Firebase Auth; use a standard domain like @gmail.com or @auradesk.com.';
+          msg = 'Invalid email address format (e.g. name@domain.com).';
         } else if (msg.includes('auth/weak-password')) {
           msg = 'Password is too weak. Firebase requires at least 6 characters.';
         } else if (msg.includes('auth/user-not-found') || msg.includes('auth/invalid-credential')) {
@@ -173,18 +165,32 @@ export function AuthView() {
 
         <form onSubmit={handleSubmit} className="space-y-3.5">
           {isSignUp && (
-            <div>
-              <label className="block text-[11px] font-medium text-[#6B7280] mb-1">
-                Full Name
-              </label>
-              <Input
-                type="text"
-                required
-                placeholder="Shahrukh"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-              />
-            </div>
+            <>
+              <div>
+                <label className="block text-[11px] font-medium text-[#6B7280] mb-1">
+                  Full Name
+                </label>
+                <Input
+                  type="text"
+                  required
+                  placeholder="Shahrukh"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-[#6B7280] mb-1">
+                  Profile Pictures (Optional, Up to 5)
+                </label>
+                <ImageCarousel
+                  images={photos}
+                  onDelete={(idx) => setPhotos((prev) => prev.filter((_, i) => i !== idx))}
+                  onAddImages={(newImgs) => setPhotos((prev) => [...prev, ...newImgs].slice(0, 5))}
+                  maxImages={5}
+                />
+              </div>
+            </>
           )}
 
           <div>
@@ -235,18 +241,32 @@ export function AuthView() {
           </Button>
         </form>
 
-        <div className="mt-5 text-center">
+        <div className="mt-5 text-center space-y-2">
           <button
             type="button"
             onClick={() => {
               setIsSignUp(!isSignUp);
               setError(null);
             }}
-            className="text-xs text-[#1C1D21] hover:underline font-medium"
+            className="text-xs text-[#1C1D21] hover:underline font-medium block w-full"
           >
             {isSignUp
               ? 'Already registered? Sign In'
               : 'New member? Create an account'}
+          </button>
+
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await auth.signOut();
+              } catch {}
+              setCurrentUser(null);
+              setError(null);
+            }}
+            className="text-[10px] text-slate-400 hover:text-rose-600 transition-colors pt-2 border-t border-slate-200/60 block w-full"
+          >
+            Reset Cached Session & Reconnect
           </button>
         </div>
       </div>

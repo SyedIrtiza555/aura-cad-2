@@ -29,11 +29,15 @@ export function App() {
       if (firebaseUser) {
         const isOwnerEmail = firebaseUser.email?.toLowerCase().includes('shahrukh') ?? false;
 
-        // Ensure user doc exists in Firestore; if not, create one
+        // Ensure user doc exists in Firestore; if not or if network stalls, use immediate fallback
         try {
           const userDocRef = doc(db, 'users', firebaseUser.uid);
-          const snap = await getDoc(userDocRef);
-          if (!snap.exists()) {
+          const snap = await Promise.race([
+            getDoc(userDocRef),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+          ]);
+
+          if (!snap || !snap.exists()) {
             const initialRole = isOwnerEmail ? 'owner' : 'unassigned';
             const initialStatus = initialRole === 'owner' ? 'active' : 'pending_approval';
             const fallbackProfile: UserProfile = {
@@ -45,7 +49,8 @@ export function App() {
               initials: (firebaseUser.displayName || firebaseUser.email || 'TM').slice(0, 2).toUpperCase(),
               createdAt: Date.now(),
             };
-            await setDoc(userDocRef, fallbackProfile);
+            // Fire-and-forget background creation
+            setDoc(userDocRef, fallbackProfile, { merge: true }).catch(console.warn);
             setCurrentUser(fallbackProfile);
           } else {
             const data = snap.data() as UserProfile;
@@ -57,18 +62,24 @@ export function App() {
                 role: 'unassigned',
                 status: 'pending_approval',
               };
-              try {
-                await setDoc(userDocRef, { role: 'unassigned', status: 'pending_approval' }, { merge: true });
-              } catch (e) {
-                console.warn(e);
-              }
+              setDoc(userDocRef, { role: 'unassigned', status: 'pending_approval' }, { merge: true }).catch(console.warn);
               setCurrentUser(corrected);
             } else {
               setCurrentUser(data);
             }
           }
         } catch (e) {
-          console.warn('Profile initialization error:', e);
+          console.warn('Profile initialization fallback:', e);
+          const initialRole = isOwnerEmail ? 'owner' : 'unassigned';
+          setCurrentUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email || '',
+            displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Team Member',
+            role: initialRole,
+            status: initialRole === 'owner' ? 'active' : 'pending_approval',
+            initials: (firebaseUser.displayName || firebaseUser.email || 'TM').slice(0, 2).toUpperCase(),
+            createdAt: Date.now(),
+          });
         }
 
         // Real-time listener for current user document updates (e.g. role promotions)

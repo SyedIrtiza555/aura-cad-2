@@ -1,6 +1,6 @@
 import type { Order, UserProfile, OrderStatus } from '../../../shared/types';
 import { useUIStore } from '../../../shared/store';
-import { Badge, DeleteConfirmModal } from '../../../shared/ui';
+import { Badge, DeleteConfirmModal, ImageCarousel } from '../../../shared/ui';
 import { useState } from 'react';
 import {
   User,
@@ -75,6 +75,9 @@ export function CardsGridView({ orders, onDeleteOrder }: CardsGridViewProps) {
                   </span>
                   {getStatusBadge(order.status)}
                 </div>
+
+                {/* Photo Carousel Thumbnail */}
+                <ImageCarousel images={order.images} compact className="mb-2" />
 
                 <h4 className="text-sm font-semibold text-[#1C1D21] line-clamp-1">
                   {order.title}

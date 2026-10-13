@@ -161,10 +161,13 @@ export function OrderDashboard({ teamUsers }: { teamUsers: UserProfile[] }) {
     }
 
     try {
-      await updateDoc(doc(db, 'orders', merged.id), updatedFields);
+      await Promise.race([
+        updateDoc(doc(db, 'orders', merged.id), updatedFields),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Update timeout')), 3000)),
+      ]);
 
       const dayDate = new Date().toISOString().split('T')[0];
-      await setDoc(doc(db, 'order_snapshots', `${merged.id}-${dayDate}`), {
+      setDoc(doc(db, 'order_snapshots', `${merged.id}-${dayDate}`), {
         order_id: merged.id,
         date_key: dayDate,
         day_number: Math.max(
@@ -173,9 +176,9 @@ export function OrderDashboard({ teamUsers }: { teamUsers: UserProfile[] }) {
         ),
         timestamp: Date.now(),
         snapshot_payload: merged,
-      });
+      }).catch(console.warn);
     } catch (e) {
-      console.warn('Persisted to local cache:', e);
+      console.warn('Order update persisted locally:', e);
     }
   };
 
@@ -350,16 +353,31 @@ export function OrderDashboard({ teamUsers }: { teamUsers: UserProfile[] }) {
                         .map((d) => (
                           <div
                             key={d.uid}
-                            className="bg-white border border-slate-200/80 p-4 rounded-2xl space-y-1 shadow-xs"
+                            className="bg-white border border-slate-200/80 p-4 rounded-2xl space-y-2 shadow-xs"
                           >
-                            <div className="flex items-center gap-2">
-                              <Palette className="w-4 h-4 text-slate-500" />
-                              <span className="font-semibold text-[#1C1D21] text-xs">
-                                {d.displayName}
-                              </span>
+                            <div className="flex items-center gap-3">
+                              {d.photoUrl ? (
+                                <img
+                                  src={d.photoUrl}
+                                  alt={d.displayName}
+                                  className="w-10 h-10 rounded-xl object-cover border border-slate-200"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-mono text-xs font-bold">
+                                  {d.initials || d.displayName.slice(0, 2).toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <Palette className="w-3.5 h-3.5 text-slate-500" />
+                                  <span className="font-semibold text-[#1C1D21] text-xs">
+                                    {d.displayName}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-[#6B7280]">{d.email}</p>
+                              </div>
                             </div>
-                            <p className="text-[11px] text-[#6B7280]">{d.email}</p>
-                            <div className="text-[11px] text-slate-500 font-mono pt-1">
+                            <div className="text-[11px] text-slate-500 font-mono pt-1 border-t border-slate-100">
                               Active: {orders.filter((o) => o.assigned_designer_id === d.uid).length} orders
                             </div>
                           </div>
@@ -378,16 +396,31 @@ export function OrderDashboard({ teamUsers }: { teamUsers: UserProfile[] }) {
                         .map((a) => (
                           <div
                             key={a.uid}
-                            className="bg-white border border-slate-200/80 p-4 rounded-2xl space-y-1 shadow-xs"
+                            className="bg-white border border-slate-200/80 p-4 rounded-2xl space-y-2 shadow-xs"
                           >
-                            <div className="flex items-center gap-2">
-                              <Briefcase className="w-4 h-4 text-slate-500" />
-                              <span className="font-semibold text-[#1C1D21] text-xs">
-                                {a.displayName}
-                              </span>
+                            <div className="flex items-center gap-3">
+                              {a.photoUrl ? (
+                                <img
+                                  src={a.photoUrl}
+                                  alt={a.displayName}
+                                  className="w-10 h-10 rounded-xl object-cover border border-slate-200"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-mono text-xs font-bold">
+                                  {a.initials || a.displayName.slice(0, 2).toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <Briefcase className="w-3.5 h-3.5 text-slate-500" />
+                                  <span className="font-semibold text-[#1C1D21] text-xs">
+                                    {a.displayName}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-[#6B7280]">{a.email}</p>
+                              </div>
                             </div>
-                            <p className="text-[11px] text-[#6B7280]">{a.email}</p>
-                            <div className="text-[11px] text-slate-500 font-mono pt-1">
+                            <div className="text-[11px] text-slate-500 font-mono pt-1 border-t border-slate-100">
                               Intakes: {orders.filter((o) => o.sales_agent_id === a.uid).length} orders
                             </div>
                           </div>
@@ -447,9 +480,17 @@ export function OrderDashboard({ teamUsers }: { teamUsers: UserProfile[] }) {
                               className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors"
                             >
                               <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-full bg-[#1C1D21] text-white flex items-center justify-center text-xs font-bold font-mono">
-                                  {member.initials || member.displayName.slice(0, 2).toUpperCase()}
-                                </div>
+                                {member.photoUrl ? (
+                                  <img
+                                    src={member.photoUrl}
+                                    alt={member.displayName}
+                                    className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-9 h-9 rounded-full bg-[#1C1D21] text-white flex items-center justify-center text-xs font-bold font-mono shrink-0">
+                                    {member.initials || member.displayName.slice(0, 2).toUpperCase()}
+                                  </div>
+                                )}
                                 <div>
                                   <div className="flex items-center gap-2">
                                     <span className="font-semibold text-xs text-[#1C1D21]">

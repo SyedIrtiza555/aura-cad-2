@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Order, UserProfile, OrderStatus } from '../../shared/types';
 import { useUIStore } from '../../shared/store';
-import { Badge, Button } from '../../shared/ui';
+import { Badge, Button, ImageCarousel } from '../../shared/ui';
 import { copyToClipboard } from '../../shared/notifications';
 import { TimeMachineSlider } from './TimeMachineSlider';
 import { InvoicePanel } from '../invoices/InvoicePanel';
@@ -25,6 +25,7 @@ import {
   Calendar,
   History,
   Trash2,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { DeleteConfirmModal } from '../../shared/ui';
 
@@ -61,6 +62,7 @@ export function OrderDetail({
   const [clientPhone, setClientPhone] = useState(order.client_phone || '');
   const [agreedPrice, setAgreedPrice] = useState(String(order.agreed_price || ''));
   const [projectBrief, setProjectBrief] = useState(order.project_brief);
+  const [images, setImages] = useState<string[]>(order.images || []);
   const [dueDate, setDueDate] = useState(
     order.due_date
       ? new Date(order.due_date).toISOString().split('T')[0]
@@ -71,22 +73,40 @@ export function OrderDetail({
   );
   const [salesAgentId, setSalesAgentId] = useState(order.sales_agent_id || '');
 
-  // Keep state synced with incoming order prop
+  // Track current order ID to prevent feedback loop and unneeded resets while user is typing
+  const currentOrderIdRef = useRef(order.id);
+
+  // Safely keep state synced with incoming order prop
   useEffect(() => {
-    setOrderNumber(order.orderNumber);
-    setTitle(order.title);
-    setClientName(order.client_name);
-    setClientPhone(order.client_phone || '');
-    setAgreedPrice(String(order.agreed_price || ''));
-    setProjectBrief(order.project_brief);
-    setDueDate(
-      order.due_date
-        ? new Date(order.due_date).toISOString().split('T')[0]
-        : new Date(order.created_at + 86400000 * 5).toISOString().split('T')[0]
-    );
-    setAssignedDesignerId(order.assigned_designer_id || '');
-    setSalesAgentId(order.sales_agent_id || '');
-  }, [order]);
+    if (currentOrderIdRef.current !== order.id) {
+      currentOrderIdRef.current = order.id;
+      setOrderNumber(order.orderNumber);
+      setTitle(order.title);
+      setClientName(order.client_name);
+      setClientPhone(order.client_phone || '');
+      setAgreedPrice(String(order.agreed_price || ''));
+      setProjectBrief(order.project_brief);
+      setImages(order.images || []);
+      setDueDate(
+        order.due_date
+          ? new Date(order.due_date).toISOString().split('T')[0]
+          : new Date(order.created_at + 86400000 * 5).toISOString().split('T')[0]
+      );
+      setAssignedDesignerId(order.assigned_designer_id || '');
+      setSalesAgentId(order.sales_agent_id || '');
+    } else {
+      // Background sync: update images or assignments if server has changed them
+      if (order.images && JSON.stringify(order.images) !== JSON.stringify(images)) {
+        setImages(order.images);
+      }
+      if (order.assigned_designer_id !== assignedDesignerId) {
+        setAssignedDesignerId(order.assigned_designer_id || '');
+      }
+      if (order.sales_agent_id !== salesAgentId) {
+        setSalesAgentId(order.sales_agent_id || '');
+      }
+    }
+  }, [order.id, order.images, order.assigned_designer_id, order.sales_agent_id]);
 
   const isDesigner = currentUser?.role === 'designer';
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'owner';
@@ -99,16 +119,34 @@ export function OrderDetail({
     (u) => u.role === 'sales_agent' && u.status === 'active'
   );
 
-  // Instant inline persistence helper without needing 'edit' or 'save' button
+  // Instant inline persistence helper with race timeout so UI never freezes
   const triggerAutoSave = async (fieldsToUpdate: Partial<Order>) => {
     try {
-      await onUpdateOrder({
-        ...fieldsToUpdate,
-        updated_at: Date.now(),
-      });
+      await Promise.race([
+        onUpdateOrder({
+          id: order.id,
+          ...fieldsToUpdate,
+          updated_at: Date.now(),
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Auto-save timeout')), 4000)
+        ),
+      ]);
     } catch (err) {
-      console.warn('Auto-save error:', err);
+      console.warn('Auto-save warning:', err);
     }
+  };
+
+  const handleAddImages = async (newImages: string[]) => {
+    const updated = [...images, ...newImages].slice(0, 5);
+    setImages(updated);
+    await triggerAutoSave({ images: updated });
+  };
+
+  const handleDeleteImage = async (indexToRemove: number) => {
+    const updated = images.filter((_, idx) => idx !== indexToRemove);
+    setImages(updated);
+    await triggerAutoSave({ images: updated });
   };
 
   const handleCopyCode = async (text: string) => {
@@ -473,6 +511,26 @@ export function OrderDetail({
               onBlur={() => triggerAutoSave({ project_brief: projectBrief })}
               placeholder="Detail metal alloy, dimensions, stones..."
               className="w-full bg-white/60 border border-slate-200/80 rounded-xl p-3 text-xs text-[#1C1D21] focus:outline-none focus:border-[#1C1D21] transition-colors"
+            />
+          </div>
+
+          {/* Design & CAD Reference Pictures Carousel Gallery */}
+          <div className="glass-panel p-3.5 rounded-2xl space-y-3 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5 text-slate-500" />
+                CAD & Reference Pictures (Optional, Up to 5)
+              </span>
+              <span className="text-[10px] font-mono text-slate-400">
+                {images.length}/5 uploaded
+              </span>
+            </div>
+
+            <ImageCarousel
+              images={images}
+              onDelete={handleDeleteImage}
+              onAddImages={handleAddImages}
+              maxImages={5}
             />
           </div>
 

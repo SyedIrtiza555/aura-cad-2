@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useUIStore } from '../../shared/store';
-import { Button, Input } from '../../shared/ui';
-import { PlusCircle, X, DollarSign, User, Phone, FileText } from 'lucide-react';
+import { Button, Input, ImageCarousel } from '../../shared/ui';
+import { PlusCircle, X, DollarSign, User, Phone, FileText, Image as ImageIcon } from 'lucide-react';
 import type { Order } from '../../shared/types';
 
 interface NewOrderModalProps {
@@ -18,6 +18,7 @@ export function NewOrderModal({ onCreateOrder }: NewOrderModalProps) {
   const [clientPhone, setClientPhone] = useState('');
   const [agreedPrice, setAgreedPrice] = useState('');
   const [projectBrief, setProjectBrief] = useState('');
+  const [images, setImages] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   if (!isNewOrderModalOpen) return null;
@@ -33,6 +34,7 @@ export function NewOrderModal({ onCreateOrder }: NewOrderModalProps) {
         client_phone: clientPhone.trim(),
         agreed_price: parseFloat(agreedPrice) || 0,
         project_brief: projectBrief.trim(),
+        images: images.length > 0 ? images : undefined,
         status: 'SUBMITTED_TO_ADMIN',
         sales_agent_id: currentUser?.uid || 'anonymous',
         sales_agent_name: currentUser?.displayName || 'Sales Agent',
@@ -45,6 +47,7 @@ export function NewOrderModal({ onCreateOrder }: NewOrderModalProps) {
       setClientPhone('');
       setAgreedPrice('');
       setProjectBrief('');
+      setImages([]);
       closeNewOrderModal();
     } finally {
       setSubmitting(false);
@@ -142,11 +145,29 @@ export function NewOrderModal({ onCreateOrder }: NewOrderModalProps) {
             </label>
             <textarea
               required
-              rows={4}
+              rows={3}
               placeholder="Detail metal alloy, prong settings, stone dimensions, target delivery date..."
               value={projectBrief}
               onChange={(e) => setProjectBrief(e.target.value)}
               className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 placeholder:text-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+            />
+          </div>
+
+          {/* Reference Pictures (Optional, Up to 5) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5 text-slate-400" /> Reference Pictures (Optional, Up to 5)
+              </label>
+              <span className="text-[10px] font-mono text-slate-400">
+                {images.length}/5
+              </span>
+            </div>
+            <ImageCarousel
+              images={images}
+              onDelete={(idx) => setImages((prev) => prev.filter((_, i) => i !== idx))}
+              onAddImages={(newImgs) => setImages((prev) => [...prev, ...newImgs].slice(0, 5))}
+              maxImages={5}
             />
           </div>
 

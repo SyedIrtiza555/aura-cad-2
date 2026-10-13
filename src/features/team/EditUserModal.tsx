@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { UserProfile, UserRole, UserStatus } from '../../shared/types';
-import { Button, Input, Badge } from '../../shared/ui';
-import { X, Trash2, Shield, AlertTriangle, Check, UserCheck } from 'lucide-react';
+import { Button, Input, Badge, ImageCarousel } from '../../shared/ui';
+import { X, Trash2, Shield, AlertTriangle, Check, UserCheck, Image as ImageIcon } from 'lucide-react';
 
 interface EditUserModalProps {
   user: UserProfile | null;
@@ -28,6 +28,9 @@ export function EditUserModal({
   const [email, setEmail] = useState(user.email || '');
   const [username, setUsername] = useState(user.username || '');
   const [initials, setInitials] = useState(user.initials || '');
+  const [photos, setPhotos] = useState<string[]>(
+    user.photos || (user.photoUrl ? [user.photoUrl] : [])
+  );
   const [role, setRole] = useState<UserRole>(user.role);
   const [status, setStatus] = useState<UserStatus>(user.status);
   const [loading, setLoading] = useState(false);
@@ -41,6 +44,7 @@ export function EditUserModal({
       setEmail(user.email || '');
       setUsername(user.username || user.email?.split('@')[0] || '');
       setInitials(user.initials || (user.displayName || 'U').slice(0, 2).toUpperCase());
+      setPhotos(user.photos || (user.photoUrl ? [user.photoUrl] : []));
       setRole(user.role);
       setStatus(user.status);
       setConfirmDelete(false);
@@ -79,6 +83,8 @@ export function EditUserModal({
         email: email.trim(),
         username: username.trim() || email.trim().split('@')[0],
         initials: (initials.trim() || displayName.slice(0, 2)).toUpperCase(),
+        photoUrl: photos[0] || '',
+        photos: photos.length > 0 ? photos : [],
         role: isTargetRootOwner ? 'owner' : role,
         status: isTargetRootOwner ? 'active' : status,
       });
@@ -148,6 +154,24 @@ export function EditUserModal({
 
           {!confirmDelete ? (
             <form onSubmit={handleSave} className="space-y-4">
+              {/* Member Pictures & Carousel */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] font-medium text-[#6B7280] flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5 text-slate-400" /> Member Photos / Portfolio (Up to 5)
+                  </label>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    {photos.length}/5
+                  </span>
+                </div>
+                <ImageCarousel
+                  images={photos}
+                  onDelete={(idx) => setPhotos((prev) => prev.filter((_, i) => i !== idx))}
+                  onAddImages={(newImgs) => setPhotos((prev) => [...prev, ...newImgs].slice(0, 5))}
+                  maxImages={5}
+                />
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-medium text-[#6B7280] mb-1">

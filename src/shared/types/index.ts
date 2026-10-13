@@ -9,6 +9,8 @@ export interface UserProfile {
   role: UserRole;
   status: UserStatus;
   initials?: string;
+  photoUrl?: string;
+  photos?: string[];
   createdAt: number;
   approvedAt?: number;
   approvedBy?: string;
@@ -58,6 +60,7 @@ export interface Order {
   assigned_designer_id?: string;
   assigned_designer_name?: string;
   assigned_designer_initials?: string;
+  images?: string[]; // Up to 5 optional CAD / reference pictures
   created_at: number;
   updated_at: number;
   due_date?: number;

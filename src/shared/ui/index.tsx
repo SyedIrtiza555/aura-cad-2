@@ -107,3 +107,4 @@ export const Badge: React.FC<BadgeProps> = ({
 };
 
 export { DeleteConfirmModal } from './DeleteConfirmModal';
+export { ImageCarousel } from './ImageCarousel';

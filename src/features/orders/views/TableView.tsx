@@ -15,6 +15,7 @@ import {
   PanelRightOpen,
   AppWindow,
   Trash2,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { DeleteConfirmModal } from '../../../shared/ui';
 
@@ -224,18 +225,38 @@ export function TableView({ orders, onDeleteOrder }: TableViewProps) {
                     }`}
                   >
                     <td className="py-2.5 px-4 font-mono font-bold text-[#1C1D21] whitespace-nowrap">
-                      <div className="flex items-center gap-1">
-                        <span>{order.orderNumber}</span>
-                        <button
-                          onClick={(e) => handleCopy(e, order.orderNumber)}
-                          className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-700 p-0.5 rounded transition-opacity"
-                        >
-                          {copiedId === order.orderNumber ? (
-                            <Check className="w-3 h-3 text-emerald-600" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </button>
+                      <div className="flex items-center gap-2">
+                        {order.images && order.images.length > 0 ? (
+                          <div className="relative w-7 h-7 rounded-lg overflow-hidden border border-slate-200 shrink-0 bg-slate-900">
+                            <img
+                              src={order.images[0]}
+                              alt="Thumb"
+                              className="w-full h-full object-cover"
+                            />
+                            {order.images.length > 1 && (
+                              <span className="absolute bottom-0 right-0 bg-black/80 text-[7px] text-white px-0.5 font-mono leading-none">
+                                +{order.images.length - 1}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="w-7 h-7 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-300 shrink-0">
+                            <ImageIcon className="w-3.5 h-3.5" />
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1">
+                          <span>{order.orderNumber}</span>
+                          <button
+                            onClick={(e) => handleCopy(e, order.orderNumber)}
+                            className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-700 p-0.5 rounded transition-opacity"
+                          >
+                            {copiedId === order.orderNumber ? (
+                              <Check className="w-3 h-3 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </td>
 
