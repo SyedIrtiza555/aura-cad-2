@@ -10,6 +10,7 @@
     "notification:default",
     "clipboard-manager:default",
     "process:default",
-    "updater:default"
+    "updater:default",
+    "window-state:default"
   ]
 }
